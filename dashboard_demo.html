@@ -1,0 +1,713 @@
+<title>Estufa Inteligente — Painel de Controle</title>
+<style>
+  :root{
+    --bg:#070b12;
+    --bg-2:#0a1019;
+    --surface:#0d141f;
+    --surface-2:#121b29;
+    --border:#1e2b3f;
+    --text:#e8eefb;
+    --muted:#8195b0;
+    --muted-2:#54687f;
+    --accent:#22c7d9;
+    --accent-2:#7c5cff;
+    --ok:#22b884;
+    --warn:#f2a93c;
+    --danger:#ef4a5a;
+    --font-display: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", "Roboto Mono", Menlo, Consolas, monospace;
+    --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --radius: 16px;
+  }
+  @media (prefers-color-scheme: light){
+    :root{
+      --bg:#eef2f8; --bg-2:#e6ecf5; --surface:#ffffff; --surface-2:#f4f7fc;
+      --border:#d7e0ee; --text:#101826; --muted:#54637a; --muted-2:#8494a8;
+      --accent:#0e8fa3; --accent-2:#6d4bd6; --ok:#0f9d64; --warn:#b6790a; --danger:#d8394a;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#070b12; --bg-2:#0a1019; --surface:#0d141f; --surface-2:#121b29;
+    --border:#1e2b3f; --text:#e8eefb; --muted:#8195b0; --muted-2:#54687f;
+    --accent:#22c7d9; --accent-2:#7c5cff; --ok:#22b884; --warn:#f2a93c; --danger:#ef4a5a;
+  }
+  :root[data-theme="light"]{
+    --bg:#eef2f8; --bg-2:#e6ecf5; --surface:#ffffff; --surface-2:#f4f7fc;
+    --border:#d7e0ee; --text:#101826; --muted:#54637a; --muted-2:#8494a8;
+    --accent:#0e8fa3; --accent-2:#6d4bd6; --ok:#0f9d64; --warn:#b6790a; --danger:#d8394a;
+  }
+
+  *{box-sizing:border-box;}
+  html,body{margin:0; padding:0;}
+  body{
+    background:
+      radial-gradient(60rem 30rem at 12% -10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
+      radial-gradient(50rem 26rem at 100% 0%, color-mix(in srgb, var(--accent-2) 14%, transparent), transparent 60%),
+      var(--bg);
+    color:var(--text);
+    font-family:var(--font-body);
+    min-height:100vh;
+  }
+  .scene{max-width:1280px; margin:0 auto; padding:28px 24px 64px;}
+
+  ::selection{background:color-mix(in srgb, var(--accent) 35%, transparent);}
+  a{color:inherit;}
+  :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:6px;}
+
+  .eyebrow{
+    font-family:var(--font-display); font-size:.7rem; text-transform:uppercase;
+    letter-spacing:.16em; color:var(--muted); font-weight:600;
+  }
+  .tabular{font-variant-numeric:tabular-nums;}
+
+  /* ---------- topbar ---------- */
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+    flex-wrap:wrap; padding-bottom:20px; margin-bottom:24px;
+    border-bottom:1px solid var(--border);
+  }
+  .brand{display:flex; align-items:baseline; gap:10px;}
+  .brand .mark{color:var(--accent); font-family:var(--font-display); font-size:1.1rem;}
+  .brand h1{
+    font-family:var(--font-display); font-size:clamp(1.25rem, 1.6vw + .9rem, 1.6rem);
+    font-weight:700; letter-spacing:-.01em; margin:0; text-wrap:balance;
+    background:linear-gradient(90deg, var(--text), var(--accent) 65%, var(--accent-2));
+    -webkit-background-clip:text; background-clip:text; color:transparent;
+  }
+  .topbar-meta{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .chip{
+    display:inline-flex; align-items:center; gap:7px; padding:6px 12px;
+    border-radius:100px; border:1px solid var(--border); background:var(--surface);
+    font-family:var(--font-display); font-size:.72rem; letter-spacing:.05em; color:var(--muted);
+    white-space:nowrap;
+  }
+  .chip .dot{width:7px; height:7px; border-radius:50%; background:var(--muted-2); flex:none;}
+  .chip.online .dot{background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent);}
+  .status-dot-btn{
+    width:36px; height:22px; border-radius:100px; border:none; padding:0; flex:none; cursor:default;
+    background:var(--warn); box-shadow:0 0 0 3px color-mix(in srgb, var(--warn) 25%, transparent);
+  }
+  @media (prefers-reduced-motion:no-preference){
+    .chip.online .dot{animation:pulse 2.4s ease-in-out infinite;}
+    .status-dot-btn{animation:pulse 2.4s ease-in-out infinite;}
+  }
+  @keyframes pulse{0%,100%{opacity:1;} 50%{opacity:.45;}}
+
+  /* ---------- hero ---------- */
+  .hero{
+    display:grid; grid-template-columns:1.5fr 1fr; gap:16px; margin-bottom:28px;
+  }
+  @media (max-width:900px){ .hero{grid-template-columns:1fr;} }
+
+  .panel{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px;
+  }
+  .panel-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+  .panel-head h2{margin:0; font-size:.95rem; font-weight:600;}
+
+  .cam-frame{
+    position:relative; width:100%; aspect-ratio:16/10; border-radius:12px; overflow:hidden;
+    background:#03080a; border:1px solid var(--border);
+  }
+  .cam-frame canvas{width:100%; height:100%; display:block;}
+  .cam-overlay{
+    position:absolute; inset:0; pointer-events:none;
+    font-family:var(--font-display); font-size:.68rem; letter-spacing:.04em;
+  }
+  .cam-tl{position:absolute; top:10px; left:12px; color:#c9f7ff; text-shadow:0 1px 4px rgba(0,0,0,.6);}
+  .cam-tr{position:absolute; top:10px; right:12px; display:flex; align-items:center; gap:6px; color:#ff8f97; text-shadow:0 1px 4px rgba(0,0,0,.6);}
+  .cam-tr .rec-dot{width:8px; height:8px; border-radius:50%; background:#ff4d5e;}
+  @media (prefers-reduced-motion:no-preference){ .cam-tr .rec-dot{animation:pulse 1.4s ease-in-out infinite;} }
+  .cam-bottom{
+    position:absolute; left:0; right:0; bottom:0; padding:8px 12px;
+    background:linear-gradient(0deg, rgba(0,0,0,.55), transparent);
+    color:#d7f6ff; display:flex; justify-content:space-between; gap:8px;
+  }
+  .cam-frame canvas{filter:brightness(.28) saturate(.35);}
+  .no-signal{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:6px; background:rgba(3,8,10,.82); color:#ffb3ba; text-align:center; padding:16px;
+    font-family:var(--font-display);
+  }
+  .no-signal .big{font-size:1.05rem; letter-spacing:.1em;}
+  .no-signal .sub{font-size:.72rem; color:#ffcdd2; max-width:300px; letter-spacing:.02em;}
+  .no-signal .sub.network{color:#ffd9c2;}
+
+  .vitals{display:flex; flex-direction:column; gap:12px;}
+  .vitals-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;}
+  .vital{
+    background:var(--surface-2); border:1px solid var(--border); border-radius:12px;
+    padding:12px; display:flex; flex-direction:column; gap:4px;
+  }
+  .vital .label{font-size:.72rem; color:var(--muted); font-family:var(--font-display); letter-spacing:.04em;}
+  .vital .val{font-family:var(--font-display); font-size:1.5rem; font-weight:700;}
+  .vital .val small{font-size:.85rem; font-weight:500; color:var(--muted); margin-left:2px;}
+  .vital.state .val{font-size:1.05rem;}
+  .vital.state.on .val{color:var(--ok);}
+  .vital.state.warn .val{color:var(--warn);}
+
+  /* ---------- sections ---------- */
+  section.group{margin-bottom:28px;}
+  .group > .eyebrow{margin-bottom:10px; display:block;}
+  .cards{display:grid; gap:14px; grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px; display:flex; flex-direction:column; gap:10px;
+  }
+  .card-top{display:flex; align-items:baseline; justify-content:space-between; gap:8px;}
+  .card-top h3{margin:0; font-size:.85rem; font-weight:600; color:var(--muted);}
+  .trend{font-family:var(--font-display); font-size:.72rem; color:var(--muted-2);}
+  .card .reading{display:flex; align-items:baseline; gap:6px;}
+  .card .reading .n{font-family:var(--font-display); font-size:2.1rem; font-weight:700; line-height:1;}
+  .card .reading .u{color:var(--muted); font-size:1rem;}
+  .card .reading.warn .n{color:var(--warn);}
+  .spark{width:100%; height:44px; display:block;}
+
+  /* ---------- actuators ---------- */
+  .actuator-card{
+    background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+    padding:18px; display:flex; flex-direction:column; gap:14px;
+  }
+  .actuator-head{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+  .actuator-head h3{margin:0; font-size:1rem; font-weight:700;}
+  .status-pill{
+    font-family:var(--font-display); font-size:.72rem; letter-spacing:.04em; padding:4px 10px;
+    border-radius:100px; background:var(--surface-2); color:var(--muted); border:1px solid var(--border);
+  }
+  .status-pill.on{color:var(--ok); border-color:color-mix(in srgb, var(--ok) 45%, var(--border)); background:color-mix(in srgb, var(--ok) 12%, var(--surface-2));}
+
+  .switch-row{display:flex; align-items:center; justify-content:space-between; gap:10px;}
+  .switch-row .txt{font-size:.88rem; color:var(--muted);}
+  .switch{position:relative; width:48px; height:26px; flex:none;}
+  .switch input{position:absolute; opacity:0; width:100%; height:100%; margin:0; cursor:pointer;}
+  .switch .track{
+    position:absolute; inset:0; background:var(--surface-2); border:1px solid var(--border);
+    border-radius:26px; transition:.25s;
+  }
+  .switch .track::before{
+    content:""; position:absolute; height:18px; width:18px; left:3px; top:2px;
+    background:var(--muted); border-radius:50%; transition:.25s;
+  }
+  .switch input:checked + .track{background:color-mix(in srgb, var(--accent) 30%, var(--surface-2)); border-color:var(--accent);}
+  .switch input:checked + .track::before{transform:translateX(21px); background:var(--accent);}
+  .switch input:focus-visible + .track{outline:2px solid var(--accent); outline-offset:2px;}
+
+  .divider{height:1px; background:var(--border); border:0; margin:2px 0;}
+
+  .threshold-row{display:flex; flex-direction:column; gap:6px;}
+  .threshold-row .top{display:flex; justify-content:space-between; font-size:.8rem; color:var(--muted);}
+  input[type="range"]{
+    -webkit-appearance:none; width:100%; height:4px; border-radius:4px;
+    background:var(--surface-2); accent-color:var(--accent);
+  }
+  .pump-status{font-family:var(--font-display); font-size:.78rem; color:var(--muted);}
+  .pump-status.active{color:var(--ok);}
+
+  footer{
+    margin-top:12px; padding-top:18px; border-top:1px solid var(--border);
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
+    font-size:.78rem; color:var(--muted-2);
+  }
+  footer .sig{font-family:var(--font-display);}
+</style>
+
+<div class="scene">
+
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark">◆</span>
+      <h1>ESTUFA // PAINEL DE CONTROLE</h1>
+    </div>
+    <div class="topbar-meta">
+      <button class="status-dot-btn" type="button" aria-label="status"></button>
+      <span class="chip online"><span class="dot"></span>SISTEMA ONLINE</span>
+      <span class="chip">SESSÃO <span id="sessionClock" class="tabular">00:00:00</span></span>
+    </div>
+  </div>
+
+  <div class="hero">
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Monitoramento — ESTUFA-CAM 01</h2>
+      </div>
+      <div class="cam-frame">
+        <canvas id="camCanvas"></canvas>
+        <div class="cam-overlay">
+          <div class="cam-tl">ESTUFA-CAM-01 · 960×600</div>
+          <div class="cam-bottom">
+            <span>ESP32-CAM</span>
+            <span id="camClock" class="tabular">00:00:00</span>
+          </div>
+        </div>
+        <div class="no-signal">
+          <span class="big">📡 SIGNAL LOST</span>
+          <span class="sub">Verifique a conexão local da câmera.</span>
+          <span class="sub network">Última rede conectada: <strong>Educação</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel vitals">
+      <div class="panel-head" style="margin-bottom:0;">
+        <h2>Leitura Atual</h2>
+        <span class="eyebrow">A CADA 2S</span>
+      </div>
+      <div class="vitals-grid">
+        <div class="vital">
+          <span class="label">TEMPERATURA</span>
+          <span class="val tabular"><span id="v-temp">--</span><small>°C</small></span>
+        </div>
+        <div class="vital">
+          <span class="label">UMIDADE DO AR</span>
+          <span class="val tabular"><span id="v-hum">--</span><small>%</small></span>
+        </div>
+        <div class="vital" id="v-pump-wrap">
+          <span class="label">BOMBA</span>
+          <span class="val" id="v-pump">--</span>
+        </div>
+        <div class="vital" id="v-uv-wrap">
+          <span class="label">LUZ UV</span>
+          <span class="val" id="v-uv">--</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <section class="group">
+    <span class="eyebrow">CLIMA · GUAÍRA, PR</span>
+    <div class="cards">
+      <div class="card">
+        <div class="card-top"><h3>Temperatura</h3><span class="trend" id="t-temp">--</span></div>
+        <div class="reading"><span class="n tabular" id="n-temp">--</span><span class="u">°C</span></div>
+        <canvas class="spark" id="s-temp"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-top"><h3>Umidade do Ar</h3><span class="trend" id="t-hum">--</span></div>
+        <div class="reading"><span class="n tabular" id="n-hum">--</span><span class="u">%</span></div>
+        <canvas class="spark" id="s-hum"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <span class="eyebrow">SOLO</span>
+    <div class="cards">
+      <div class="card">
+        <div class="card-top"><h3>Umidade do Solo 1</h3><span class="trend" id="t-soil1">--</span></div>
+        <div class="reading" id="r-soil1"><span class="n tabular" id="n-soil1">--</span><span class="u">%</span></div>
+        <canvas class="spark" id="s-soil1"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-top"><h3>Umidade do Solo 2</h3><span class="trend" id="t-soil2">--</span></div>
+        <div class="reading" id="r-soil2"><span class="n tabular" id="n-soil2">--</span><span class="u">%</span></div>
+        <canvas class="spark" id="s-soil2"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <span class="eyebrow">ATUADORES</span>
+    <div class="cards">
+      <div class="actuator-card">
+        <div class="actuator-head">
+          <h3>💦 Bomba de Irrigação</h3>
+          <span class="status-pill" id="pumpPill">DESLIGADA</span>
+        </div>
+        <div class="switch-row">
+          <span class="txt">Controle manual</span>
+          <label class="switch">
+            <input type="checkbox" id="pumpSwitch">
+            <span class="track"></span>
+          </label>
+        </div>
+        <hr class="divider">
+        <div class="switch-row">
+          <span class="txt">Irrigação automática</span>
+          <label class="switch">
+            <input type="checkbox" id="autoSwitch">
+            <span class="track"></span>
+          </label>
+        </div>
+        <div class="threshold-row">
+          <div class="top"><span>Limite mínimo do solo</span><span id="thLabel" class="tabular">30%</span></div>
+          <input type="range" id="thRange" min="5" max="70" value="30">
+        </div>
+        <span class="pump-status" id="pumpStatusText">modo automático desligado</span>
+      </div>
+
+      <div class="actuator-card">
+        <div class="actuator-head">
+          <h3>🔆 Luz UV Germicida</h3>
+          <span class="status-pill" id="uvPill">DESLIGADA</span>
+        </div>
+        <div class="switch-row">
+          <span class="txt">Ligar luz UV</span>
+          <label class="switch">
+            <input type="checkbox" id="uvSwitch">
+            <span class="track"></span>
+          </label>
+        </div>
+        <hr class="divider">
+        <span class="pump-status">tempo ligado nesta sessão: <span id="uvRuntime" class="tabular">00:00:00</span></span>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <span>Protótipo de apresentação — valores simulados no navegador. Arquitetura real: ESP32-CAM + DHT11 + ADS1115 + relés.</span>
+    <span class="sig">estufa.local // build sim-01</span>
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const HIST_LEN = 30;
+  const rand = (a,b) => a + Math.random()*(b-a);
+  const clamp = (v,a,b) => Math.max(a, Math.min(b,v));
+  const pad2 = n => String(Math.floor(n)).padStart(2,'0');
+  const fmtClock = s => `${pad2(s/3600)}:${pad2((s/60)%60)}:${pad2(s%60)}`;
+
+  const state = {
+    temp: 27.5, hum: 66,
+    soil1: 58, soil2: 26,
+    pump: false, uv: false,
+    autoIrrigation: false, threshold: 30,
+    pumpAutoRunning: false, pumpAutoStart: 0, lastPumpCycle: -Infinity,
+    uvSeconds: 0,
+    hist: { temp:[], hum:[], soil1:[], soil2:[] }
+  };
+  const PUMP_RUN_MS = 6000, PUMP_COOLDOWN_MS = 18000;
+
+  // Clima real de Guaíra, PR (Open-Meteo — API pública, sem chave, CORS liberado).
+  // Só a temperatura/umidade do ar vêm daqui; solo continua simulado.
+  const GUAIRA_LAT = -24.0858, GUAIRA_LON = -54.2544;
+  const climate = { temp: state.temp, hum: state.hum };
+
+  async function fetchClimate(){
+    try{
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${GUAIRA_LAT}&longitude=${GUAIRA_LON}&current=temperature_2m,relative_humidity_2m&timezone=America%2FSao_Paulo`;
+      const res = await fetch(url);
+      const d = await res.json();
+      climate.temp = d.current.temperature_2m;
+      climate.hum = d.current.relative_humidity_2m;
+    }catch(e){
+      // sem internet/API fora do ar: mantém o último valor real conhecido
+    }
+  }
+
+  for(let i=0;i<HIST_LEN;i++){
+    state.hist.temp.push(state.temp);
+    state.hist.hum.push(state.hum);
+    state.hist.soil1.push(state.soil1);
+    state.hist.soil2.push(state.soil2);
+  }
+
+  function pushHist(key, v){
+    const h = state.hist[key];
+    h.push(v);
+    if(h.length > HIST_LEN) h.shift();
+  }
+
+  function setPump(on){
+    state.pump = on;
+    document.getElementById('pumpSwitch').checked = on;
+  }
+  function setUV(on){
+    state.uv = on;
+    document.getElementById('uvSwitch').checked = on;
+  }
+
+  function autoIrrigationLogic(now){
+    if(!state.autoIrrigation) return;
+    if(state.pumpAutoRunning){
+      if(now - state.pumpAutoStart >= PUMP_RUN_MS){
+        setPump(false);
+        state.pumpAutoRunning = false;
+        state.lastPumpCycle = now;
+      }
+      return;
+    }
+    const driest = Math.min(state.soil1, state.soil2);
+    if(driest < state.threshold && (now - state.lastPumpCycle >= PUMP_COOLDOWN_MS)){
+      setPump(true);
+      state.pumpAutoRunning = true;
+      state.pumpAutoStart = now;
+    }
+  }
+
+  function trendArrow(hist){
+    const n = hist.length;
+    if(n < 2) return '—';
+    const d = hist[n-1] - hist[n-2];
+    if(Math.abs(d) < 0.05) return '—';
+    return d > 0 ? `▲ ${d.toFixed(1)}` : `▼ ${Math.abs(d).toFixed(1)}`;
+  }
+
+  // ---------------- sparkline rendering ----------------
+  function drawSpark(canvas, data, colorHex){
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if(w === 0 || h === 0) return;
+    canvas.width = w*dpr; canvas.height = h*dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+
+    const min = Math.min(...data), max = Math.max(...data);
+    const range = (max - min) || 1;
+    const padX = 3, padY = 6;
+    const stepX = (w - padX*2) / (data.length - 1);
+    const pts = data.map((v,i) => [
+      padX + i*stepX,
+      h - padY - ((v - min)/range) * (h - padY*2)
+    ]);
+
+    ctx.strokeStyle = 'rgba(128,128,128,0.18)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, h/2); ctx.lineTo(w, h/2); ctx.stroke();
+
+    const grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0, colorHex + '4d');
+    grad.addColorStop(1, colorHex + '00');
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], h - padY);
+    pts.forEach(p => ctx.lineTo(p[0], p[1]));
+    ctx.lineTo(pts[pts.length-1][0], h - padY);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    pts.forEach((p,i) => i === 0 ? ctx.moveTo(p[0],p[1]) : ctx.lineTo(p[0],p[1]));
+    ctx.strokeStyle = colorHex;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.stroke();
+
+    const last = pts[pts.length-1];
+    ctx.beginPath();
+    ctx.arc(last[0], last[1], 6, 0, Math.PI*2);
+    ctx.fillStyle = colorHex + '33';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(last[0], last[1], 3, 0, Math.PI*2);
+    ctx.fillStyle = colorHex;
+    ctx.fill();
+  }
+
+  function tokenColor(name){
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  // ---------------- simulated greenhouse camera ----------------
+  const camCanvas = document.getElementById('camCanvas');
+  const camCtx = camCanvas.getContext('2d');
+  let camW = 0, camH = 0;
+
+  function resizeCam(){
+    const dpr = window.devicePixelRatio || 1;
+    camW = camCanvas.clientWidth; camH = camCanvas.clientHeight;
+    camCanvas.width = camW * dpr; camCanvas.height = camH * dpr;
+    camCtx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  const plants = Array.from({length:9}, (_,i) => ({
+    x: (i+0.5)/9,
+    baseY: 0.62 + rand(-0.03,0.03),
+    h: rand(0.22,0.4),
+    sway: rand(0,Math.PI*2),
+    speed: rand(0.6,1.1)
+  }));
+
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function drawCam(tSec){
+    if(camW === 0) resizeCam();
+    const g = camCtx.createLinearGradient(0,0,0,camH);
+    g.addColorStop(0, '#08181a');
+    g.addColorStop(0.55, '#0c2420');
+    g.addColorStop(1, '#03100d');
+    camCtx.fillStyle = g;
+    camCtx.fillRect(0,0,camW,camH);
+
+    // faint bench/floor line
+    camCtx.strokeStyle = 'rgba(120,255,220,0.10)';
+    camCtx.lineWidth = 1;
+    for(let i=1;i<4;i++){
+      const y = camH*0.68 + i*10;
+      camCtx.beginPath(); camCtx.moveTo(0,y); camCtx.lineTo(camW,y); camCtx.stroke();
+    }
+
+    plants.forEach(p => {
+      const sway = reduceMotion ? 0 : Math.sin(tSec*p.speed + p.sway) * 4;
+      const px = p.x*camW + sway;
+      const py = p.baseY*camH;
+      const leafH = p.h*camH;
+
+      // pot
+      camCtx.fillStyle = 'rgba(90,60,40,0.55)';
+      camCtx.fillRect(px-9, py, 18, 10);
+
+      // leaves as layered arcs (procedural, no hand path data)
+      for(let l=0;l<4;l++){
+        const ang = (l/4)*Math.PI*2 + p.sway;
+        const lx = px + Math.cos(ang)*6;
+        const ly = py - leafH*0.5 + Math.sin(ang)*6;
+        camCtx.beginPath();
+        camCtx.ellipse(lx, ly, 8, leafH*0.45, ang, 0, Math.PI*2);
+        camCtx.fillStyle = `rgba(${60+l*10}, ${170+l*8}, ${120+l*6}, 0.85)`;
+        camCtx.fill();
+      }
+    });
+
+    // scanline sweep
+    if(!reduceMotion){
+      const sweepY = ((tSec*40) % (camH+40)) - 20;
+      const sg = camCtx.createLinearGradient(0, sweepY-18, 0, sweepY+18);
+      sg.addColorStop(0, 'rgba(140,255,240,0)');
+      sg.addColorStop(0.5, 'rgba(140,255,240,0.06)');
+      sg.addColorStop(1, 'rgba(140,255,240,0)');
+      camCtx.fillStyle = sg;
+      camCtx.fillRect(0, sweepY-18, camW, 36);
+    }
+
+    // subtle vignette
+    const vg = camCtx.createRadialGradient(camW/2,camH/2, camH*0.2, camW/2,camH/2, camH*0.9);
+    vg.addColorStop(0,'rgba(0,0,0,0)');
+    vg.addColorStop(1,'rgba(0,0,0,0.45)');
+    camCtx.fillStyle = vg;
+    camCtx.fillRect(0,0,camW,camH);
+  }
+
+  // ---------------- render ----------------
+  function render(){
+    document.getElementById('v-temp').textContent = state.temp.toFixed(1);
+    document.getElementById('v-hum').textContent = state.hum.toFixed(0);
+    document.getElementById('n-temp').textContent = state.temp.toFixed(1);
+    document.getElementById('n-hum').textContent = state.hum.toFixed(0);
+    document.getElementById('t-temp').textContent = trendArrow(state.hist.temp);
+    document.getElementById('t-hum').textContent = trendArrow(state.hist.hum);
+
+    document.getElementById('n-soil1').textContent = state.soil1.toFixed(0);
+    document.getElementById('n-soil2').textContent = state.soil2.toFixed(0);
+    document.getElementById('t-soil1').textContent = trendArrow(state.hist.soil1);
+    document.getElementById('t-soil2').textContent = trendArrow(state.hist.soil2);
+    document.getElementById('r-soil1').classList.toggle('warn', state.soil1 < state.threshold);
+    document.getElementById('r-soil2').classList.toggle('warn', state.soil2 < state.threshold);
+
+    const pumpVital = document.getElementById('v-pump-wrap');
+    document.getElementById('v-pump').textContent = state.pump ? 'LIGADA' : 'DESLIGADA';
+    pumpVital.classList.toggle('state', true);
+    pumpVital.classList.toggle('on', state.pump);
+
+    const uvVital = document.getElementById('v-uv-wrap');
+    document.getElementById('v-uv').textContent = state.uv ? 'LIGADA' : 'DESLIGADA';
+    uvVital.classList.toggle('state', true);
+    uvVital.classList.toggle('on', state.uv);
+
+    const pumpPill = document.getElementById('pumpPill');
+    pumpPill.textContent = state.pump ? 'LIGADA' : 'DESLIGADA';
+    pumpPill.classList.toggle('on', state.pump);
+    const uvPill = document.getElementById('uvPill');
+    uvPill.textContent = state.uv ? 'LIGADA' : 'DESLIGADA';
+    uvPill.classList.toggle('on', state.uv);
+
+    const statusText = document.getElementById('pumpStatusText');
+    if(!state.autoIrrigation){
+      statusText.textContent = 'modo automático desligado';
+      statusText.classList.remove('active');
+    } else if(state.pumpAutoRunning){
+      statusText.textContent = 'irrigando agora…';
+      statusText.classList.add('active');
+    } else {
+      const waitMs = PUMP_COOLDOWN_MS - (performance.now() - state.lastPumpCycle);
+      statusText.textContent = waitMs > 0 && isFinite(waitMs)
+        ? `em espera — próximo ciclo possível em ${Math.ceil(waitMs/1000)}s`
+        : 'monitorando solo…';
+      statusText.classList.remove('active');
+    }
+
+    document.getElementById('uvRuntime').textContent = fmtClock(state.uvSeconds);
+
+    drawSpark(document.getElementById('s-temp'), state.hist.temp, tokenColor('--accent'));
+    drawSpark(document.getElementById('s-hum'), state.hist.hum, tokenColor('--accent'));
+    drawSpark(document.getElementById('s-soil1'), state.hist.soil1, state.soil1 < state.threshold ? tokenColor('--warn') : tokenColor('--accent'));
+    drawSpark(document.getElementById('s-soil2'), state.hist.soil2, state.soil2 < state.threshold ? tokenColor('--warn') : tokenColor('--accent'));
+  }
+
+  function tick(){
+    const now = performance.now();
+    const t = Date.now()/1000;
+
+    state.temp = clamp(climate.temp + rand(-0.2,0.2), climate.temp - 1, climate.temp + 1);
+    state.hum = clamp(climate.hum + rand(-0.8,0.8), 0, 100);
+
+    const pumping = state.pump;
+    state.soil1 = clamp(state.soil1 + (pumping ? rand(4,7) : -rand(0.2,0.6)), 4, 96);
+    state.soil2 = clamp(state.soil2 + (pumping ? rand(4,7) : -rand(0.3,0.9)), 4, 96);
+
+    pushHist('temp', state.temp);
+    pushHist('hum', state.hum);
+    pushHist('soil1', state.soil1);
+    pushHist('soil2', state.soil2);
+
+    if(state.uv) state.uvSeconds += 2;
+
+    autoIrrigationLogic(now);
+    render();
+  }
+
+  // ---------------- controls ----------------
+  document.getElementById('pumpSwitch').addEventListener('change', e => {
+    setPump(e.target.checked);
+    state.autoIrrigation = false;
+    state.pumpAutoRunning = false;
+    document.getElementById('autoSwitch').checked = false;
+    render();
+  });
+  document.getElementById('uvSwitch').addEventListener('change', e => {
+    setUV(e.target.checked);
+    render();
+  });
+  document.getElementById('autoSwitch').addEventListener('change', e => {
+    state.autoIrrigation = e.target.checked;
+    if(!state.autoIrrigation) state.pumpAutoRunning = false;
+    render();
+  });
+  document.getElementById('thRange').addEventListener('input', e => {
+    state.threshold = Number(e.target.value);
+    document.getElementById('thLabel').textContent = state.threshold + '%';
+    render();
+  });
+
+  // ---------------- clocks & loops ----------------
+  const startTime = performance.now();
+  function updateClocks(){
+    const elapsed = Math.floor((performance.now() - startTime)/1000);
+    document.getElementById('sessionClock').textContent = fmtClock(elapsed);
+    document.getElementById('camClock').textContent = new Date().toLocaleTimeString('pt-BR');
+  }
+
+  function camLoop(){
+    drawCam(performance.now()/1000);
+    requestAnimationFrame(camLoop);
+  }
+
+  window.addEventListener('resize', () => { resizeCam(); render(); });
+
+  document.getElementById('thLabel').textContent = state.threshold + '%';
+  document.getElementById('thRange').value = state.threshold;
+
+  resizeCam();
+  render();
+  updateClocks();
+  fetchClimate().then(render);
+  setInterval(updateClocks, 1000);
+  setInterval(tick, 2000);
+  setInterval(fetchClimate, 5 * 60 * 1000);
+  requestAnimationFrame(camLoop);
+})();
+</script>
