@@ -250,7 +250,7 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Monitoramento — ESTUFA-CAM 01</h2>
-        <button class="chip" id="camSettingsBtn" type="button">🎥 Câmera real</button>
+        <button class="chip" id="camSettingsBtn" type="button">🔴 Live</button>
       </div>
       <div class="cam-frame offline" id="camFrame">
         <canvas id="camCanvas"></canvas>
@@ -297,7 +297,7 @@
   </div>
 
   <section class="group">
-    <span class="eyebrow">CLIMA · GUAÍRA, PR</span>
+    <span class="eyebrow">CLIMA EXTERNO · GUAÍRA, PR</span>
     <div class="cards">
       <div class="card">
         <div class="card-top"><h3>Temperatura</h3><span class="trend" id="t-temp">--</span></div>
@@ -308,6 +308,22 @@
         <div class="card-top"><h3>Umidade do Ar</h3><span class="trend" id="t-hum">--</span></div>
         <div class="reading"><span class="n tabular" id="n-hum">--</span><span class="u">%</span></div>
         <canvas class="spark" id="s-hum"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <section class="group">
+    <span class="eyebrow">DENTRO DA ESTUFA · AO VIVO</span>
+    <div class="cards">
+      <div class="card">
+        <div class="card-top"><h3>Temperatura</h3><span class="trend" id="t-estufa-temp">--</span></div>
+        <div class="reading"><span class="n tabular" id="n-estufa-temp">--</span><span class="u">°C</span></div>
+        <canvas class="spark" id="s-estufa-temp"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-top"><h3>Umidade do Ar</h3><span class="trend" id="t-estufa-hum">--</span></div>
+        <div class="reading"><span class="n tabular" id="n-estufa-hum">--</span><span class="u">%</span></div>
+        <canvas class="spark" id="s-estufa-hum"></canvas>
       </div>
     </div>
   </section>
@@ -385,12 +401,13 @@
 
 <div class="modal-overlay" id="camSettingsOverlay" hidden>
   <div class="modal">
-    <h2>Câmera real (opcional)</h2>
-    <p>Cole aqui o endereço público do stream da sua ESP32-CAM (ex.: URL de um túnel Cloudflare) e as credenciais do firmware. Fica salvo só neste navegador (localStorage) — nunca no código publicado.</p>
-    <div class="field"><label>Endereço do stream</label><input type="text" id="camInUrl" placeholder="https://exemplo.trycloudflare.com"></div>
+    <h2>Live (opcional)</h2>
+    <p>Cole aqui os endereços públicos (túneis Cloudflare) da sua ESP32-CAM e as credenciais do firmware. Fica salvo só neste navegador (localStorage) — nunca no código publicado.</p>
+    <div class="field"><label>Endereço do stream (câmera, porta 81)</label><input type="text" id="camInUrl" placeholder="https://exemplo-cam.trycloudflare.com"></div>
+    <div class="field"><label>Endereço do painel (dados, porta 80)</label><input type="text" id="dataInUrl" placeholder="https://exemplo-dados.trycloudflare.com"></div>
     <div class="field"><label>Usuário</label><input type="text" id="camInUser" autocomplete="username"></div>
     <div class="field"><label>Senha</label><input type="password" id="camInPass" autocomplete="current-password"></div>
-    <p>Deixe o endereço em branco e salve para voltar à simulação.</p>
+    <p>Deixe os endereços em branco e salve para voltar à simulação.</p>
     <div class="modal-actions">
       <button class="btn" id="camSettingsCancel" type="button">Cancelar</button>
       <button class="btn primary" id="camSettingsSave" type="button">Salvar</button>
@@ -422,10 +439,42 @@
   // ficam salvas neste navegador (localStorage), nunca no HTML publicado.
   const camState = {
     url: localStorage.getItem('estufaCamUrl') || '',
+    dataUrl: localStorage.getItem('estufaDataUrl') || '',
     user: localStorage.getItem('estufaCamUser') || '',
     pass: localStorage.getItem('estufaCamPass') || ''
   };
   let camRetryTimer = null;
+  const estufaHist = { temp: [], hum: [] };
+  let estufaDataTimer = null;
+
+  async function fetchEstufaData(){
+    if(!camState.dataUrl){
+      document.getElementById('n-estufa-temp').textContent = '--';
+      document.getElementById('n-estufa-hum').textContent = '--';
+      return;
+    }
+    try{
+      const authHeader = camState.user ? ('Basic ' + btoa(camState.user + ':' + camState.pass)) : null;
+      const res = await fetch(camState.dataUrl.replace(/\/$/, '') + '/data', {
+        cache: 'no-store',
+        headers: authHeader ? { Authorization: authHeader } : {}
+      });
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const d = await res.json();
+
+      const t = d.temperatura, h = d.umidade_ar;
+      document.getElementById('n-estufa-temp').textContent = t >= 0 ? t.toFixed(1) : '--';
+      document.getElementById('n-estufa-hum').textContent = h >= 0 ? h.toFixed(0) : '--';
+      if(t >= 0){ estufaHist.temp.push(t); if(estufaHist.temp.length > HIST_LEN) estufaHist.temp.shift(); }
+      if(h >= 0){ estufaHist.hum.push(h); if(estufaHist.hum.length > HIST_LEN) estufaHist.hum.shift(); }
+      document.getElementById('t-estufa-temp').textContent = trendArrow(estufaHist.temp);
+      document.getElementById('t-estufa-hum').textContent = trendArrow(estufaHist.hum);
+      if(estufaHist.temp.length > 1) drawSpark(document.getElementById('s-estufa-temp'), estufaHist.temp, tokenColor('--accent'));
+      if(estufaHist.hum.length > 1) drawSpark(document.getElementById('s-estufa-hum'), estufaHist.hum, tokenColor('--accent'));
+    }catch(e){
+      console.error('[estufa-data] erro:', e);
+    }
+  }
 
   // Clima real de Guaíra, PR (Open-Meteo — API pública, sem chave, CORS liberado).
   // Só a temperatura/umidade do ar vêm daqui; solo continua simulado.
@@ -649,6 +698,7 @@
   const camSettingsOverlay = document.getElementById('camSettingsOverlay');
   document.getElementById('camSettingsBtn').addEventListener('click', () => {
     document.getElementById('camInUrl').value = camState.url;
+    document.getElementById('dataInUrl').value = camState.dataUrl;
     document.getElementById('camInUser').value = camState.user;
     document.getElementById('camInPass').value = camState.pass;
     camSettingsOverlay.hidden = false;
@@ -656,13 +706,18 @@
   document.getElementById('camSettingsCancel').addEventListener('click', () => { camSettingsOverlay.hidden = true; });
   document.getElementById('camSettingsSave').addEventListener('click', () => {
     camState.url = document.getElementById('camInUrl').value.trim();
+    camState.dataUrl = document.getElementById('dataInUrl').value.trim();
     camState.user = document.getElementById('camInUser').value.trim();
     camState.pass = document.getElementById('camInPass').value;
     localStorage.setItem('estufaCamUrl', camState.url);
+    localStorage.setItem('estufaDataUrl', camState.dataUrl);
     localStorage.setItem('estufaCamUser', camState.user);
     localStorage.setItem('estufaCamPass', camState.pass);
     camSettingsOverlay.hidden = true;
     applyCamMode();
+    clearTimeout(estufaDataTimer);
+    fetchEstufaData();
+    estufaDataTimer = setInterval(fetchEstufaData, 3000);
   });
 
   const plants = Array.from({length:9}, (_,i) => ({
@@ -857,6 +912,8 @@
   updateClocks();
   applyCamMode();
   fetchClimate().then(render);
+  fetchEstufaData();
+  estufaDataTimer = setInterval(fetchEstufaData, 3000);
   setInterval(updateClocks, 1000);
   setInterval(tick, 2000);
   setInterval(fetchClimate, 5 * 60 * 1000);
