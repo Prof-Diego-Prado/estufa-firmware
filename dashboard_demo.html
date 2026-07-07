@@ -592,17 +592,20 @@
     let lastBlobUrl = null;
 
     (async () => {
+      let frameCount = 0;
       try {
+        console.log('[cam] conectando em', camState.url);
         const res = await fetch(camState.url.replace(/\/$/, '') + '/stream', {
           headers: authHeader ? { Authorization: authHeader } : {},
           signal: controller.signal
         });
+        console.log('[cam] resposta HTTP', res.status, [...res.headers.entries()]);
         if(!res.ok || !res.body) throw new Error('HTTP ' + res.status);
         const reader = res.body.getReader();
         let buf = new Uint8Array(0);
         while(true){
           const { done, value } = await reader.read();
-          if(done) break;
+          if(done){ console.log('[cam] stream encerrado pelo servidor após', frameCount, 'frames'); break; }
           const merged = new Uint8Array(buf.length + value.length);
           merged.set(buf); merged.set(value, buf.length);
           buf = merged;
@@ -616,14 +619,16 @@
 
           const frame = buf.slice(start, end);
           buf = buf.slice(end);
-          if(!gotFrame){ gotFrame = true; clearTimeout(watchdog); setRealCamOnline(); }
+          frameCount++;
+          if(!gotFrame){ gotFrame = true; clearTimeout(watchdog); setRealCamOnline(); console.log('[cam] primeiro frame ok, tamanho', frame.length); }
           const blobUrl = URL.createObjectURL(new Blob([frame], { type:'image/jpeg' }));
           const prev = lastBlobUrl;
           realCamImg.src = blobUrl;
           lastBlobUrl = blobUrl;
           if(prev) URL.revokeObjectURL(prev);
         }
-      } catch(e){ /* conexão caiu ou falhou — tratado abaixo */ }
+      } catch(e){ console.error('[cam] erro:', e); }
+      console.log('[cam] conexão finalizada, total de frames:', frameCount);
       clearTimeout(watchdog);
       setRealCamOffline();
     })();
