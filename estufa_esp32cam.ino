@@ -144,6 +144,11 @@ bool initCamera() {
 void readSensors() {
   float h = dht.readHumidity();
   float t = dht.readTemperature();
+  if (isnan(h) || isnan(t)) {
+    Serial.println("DHT11: leitura falhou (checksum/timeout) — confira fiação (VCC=3.3V, GND, DATA=GPIO4)");
+  } else {
+    Serial.printf("DHT11 ok: %.1f C, %.1f %%\n", t, h);
+  }
   if (!isnan(h)) humidity = h;
   if (!isnan(t)) temperature = t;
 
