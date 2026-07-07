@@ -274,8 +274,7 @@ void setup() {
 
   ledStrip.begin();
   ledStrip.setBrightness(UV_BRIGHTNESS);
-  ledStrip.clear();
-  ledStrip.show();
+  setUV(true); // fita liga sozinha ao iniciar e fica sempre acesa
 
   dht.begin();
   Wire.begin(I2C_SDA, I2C_SCL);
