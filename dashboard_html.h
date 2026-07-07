@@ -340,7 +340,7 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
     hist: { temp:[], hum:[], soil1:[], soil2:[] }
   };
   let offlineCount = 0;
-  let camWatchdog = null, camRetryTimer = null;
+  let camRetryTimer = null;
 
   function authHeader(){ return 'Basic ' + btoa(state.user + ':' + state.pass); }
 
@@ -487,10 +487,14 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
     return `${location.protocol}//${location.hostname}:81`;
   }
 
-  // Navegadores modernos bloqueiam credenciais embutidas na URL
-  // (https://user:pass@host) para recursos de outra origem (a porta 81
-  // conta como origem diferente da 80) — por segurança contra phishing.
-  // O navegador vai pedir o login nativamente (uma vez, cacheia depois).
+  // Navegadores modernos bloqueiam tanto credenciais embutidas na URL
+  // quanto (em vários casos) o popup nativo de login para recursos de
+  // origem diferente (a porta 81 conta como origem diferente da 80) —
+  // proteção anti-rastreamento cross-site. Por isso o JS busca o stream
+  // ele mesmo via fetch(), manda o login no cabeçalho da requisição
+  // (isso não é bloqueado) e desenha os frames JPEG à mão.
+  let camAbort = null;
+
   function setCamOnline(){ camFrame.classList.remove('offline'); }
   function setCamOffline(){
     camFrame.classList.add('offline');
@@ -499,14 +503,54 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
   }
 
   function connectCam(){
-    clearTimeout(camWatchdog); clearTimeout(camRetryTimer);
+    clearTimeout(camRetryTimer);
+    if(camAbort) camAbort.abort();
     if(!state.user){ setCamOffline(); return; }
-    camWatchdog = setTimeout(setCamOffline, 8000);
-    camStream.src = streamHost() + '/stream?_=' + Date.now();
-  }
 
-  camStream.addEventListener('load', () => { clearTimeout(camWatchdog); setCamOnline(); });
-  camStream.addEventListener('error', () => { clearTimeout(camWatchdog); setCamOffline(); });
+    const controller = new AbortController();
+    camAbort = controller;
+    let gotFrame = false;
+    const watchdog = setTimeout(() => { if(!gotFrame) controller.abort(); }, 8000);
+    const authHeader = 'Basic ' + btoa(state.user + ':' + state.pass);
+    let lastBlobUrl = null;
+
+    (async () => {
+      try {
+        const res = await fetch(streamHost() + '/stream', {
+          headers: { Authorization: authHeader },
+          signal: controller.signal
+        });
+        if(!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+        const reader = res.body.getReader();
+        let buf = new Uint8Array(0);
+        while(true){
+          const { done, value } = await reader.read();
+          if(done) break;
+          const merged = new Uint8Array(buf.length + value.length);
+          merged.set(buf); merged.set(value, buf.length);
+          buf = merged;
+
+          let start = -1;
+          for(let i=0;i<buf.length-1;i++){ if(buf[i]===0xFF && buf[i+1]===0xD8){ start=i; break; } }
+          if(start === -1){ if(buf.length > 300000) buf = new Uint8Array(0); continue; }
+          let end = -1;
+          for(let i=start+2;i<buf.length-1;i++){ if(buf[i]===0xFF && buf[i+1]===0xD9){ end=i+2; break; } }
+          if(end === -1){ if(start>0) buf = buf.slice(start); continue; }
+
+          const frame = buf.slice(start, end);
+          buf = buf.slice(end);
+          if(!gotFrame){ gotFrame = true; clearTimeout(watchdog); setCamOnline(); }
+          const blobUrl = URL.createObjectURL(new Blob([frame], { type:'image/jpeg' }));
+          const prev = lastBlobUrl;
+          camStream.src = blobUrl;
+          lastBlobUrl = blobUrl;
+          if(prev) URL.revokeObjectURL(prev);
+        }
+      } catch(e){ /* conexão caiu ou falhou — tratado abaixo */ }
+      clearTimeout(watchdog);
+      setCamOffline();
+    })();
+  }
 
   // ---------------- controles ----------------
   document.getElementById('pumpSwitch').addEventListener('change', e => {
