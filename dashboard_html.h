@@ -422,6 +422,7 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
   }
 
   async function refresh(){
+    if(!state.user) return; // sem credenciais salvas ainda: não tenta buscar (evita popup de login em loop)
     try{
       const res = await fetch('/data', { cache:'no-store', headers:{ Authorization: authHeader() } });
       if(res.status === 401) throw new Error('unauthorized');
@@ -486,10 +487,10 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
     return `${location.protocol}//${location.hostname}:81`;
   }
 
-  function withCreds(url){
-    return url.replace(/^(https?:\/\/)/, `$1${encodeURIComponent(state.user)}:${encodeURIComponent(state.pass)}@`);
-  }
-
+  // Navegadores modernos bloqueiam credenciais embutidas na URL
+  // (https://user:pass@host) para recursos de outra origem (a porta 81
+  // conta como origem diferente da 80) — por segurança contra phishing.
+  // O navegador vai pedir o login nativamente (uma vez, cacheia depois).
   function setCamOnline(){ camFrame.classList.remove('offline'); }
   function setCamOffline(){
     camFrame.classList.add('offline');
@@ -501,7 +502,7 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
     clearTimeout(camWatchdog); clearTimeout(camRetryTimer);
     if(!state.user){ setCamOffline(); return; }
     camWatchdog = setTimeout(setCamOffline, 8000);
-    camStream.src = withCreds(streamHost()) + '/stream?_=' + Date.now();
+    camStream.src = streamHost() + '/stream?_=' + Date.now();
   }
 
   camStream.addEventListener('load', () => { clearTimeout(camWatchdog); setCamOnline(); });
