@@ -220,7 +220,7 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
           <span class="val" id="v-pump">--</span>
         </div>
         <div class="vital" id="v-uv-wrap">
-          <span class="label">LUZ UV</span>
+          <span class="label">FITA ROXA</span>
           <span class="val" id="v-uv">--</span>
         </div>
       </div>
@@ -285,11 +285,11 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
 
       <div class="actuator-card">
         <div class="actuator-head">
-          <h3>🔆 Luz UV Germicida</h3>
+          <h3>🟣 Fita LED Roxa (simulação UV)</h3>
           <span class="status-pill" id="uvPill">DESLIGADA</span>
         </div>
         <div class="switch-row">
-          <span class="txt">Ligar luz UV</span>
+          <span class="txt">Ligar fita roxa</span>
           <label class="switch"><input type="checkbox" id="uvSwitch"><span class="track"></span></label>
         </div>
         <hr class="divider">

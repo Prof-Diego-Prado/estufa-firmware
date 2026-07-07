@@ -3,7 +3,9 @@
  * ---------------------------------------------------------------------
  * - Lê DHT11 (temperatura/umidade do ar)
  * - Lê 2 sensores de umidade do solo via ADS1115 (I2C)
- * - Controla bomba de irrigação e relé de luz UV
+ * - Controla bomba de irrigação (relé) e uma fita de LED endereçável
+ *   WS2812B acesa em tom roxo/violeta (aproximação visual de UV — não é
+ *   UV-C real, não tem efeito germicida)
  * - Transmite vídeo da ESP32-CAM (porta 81, /stream)
  * - Serve um dashboard web (porta 80) com leituras e controles em tempo real
  *
@@ -11,6 +13,7 @@
  *   - DHT sensor library (Adafruit)
  *   - Adafruit Unified Sensor
  *   - Adafruit ADS1X15
+ *   - Adafruit NeoPixel
  *
  * Placa: "AI Thinker ESP32-CAM" no Boards Manager do ESP32 (Espressif Systems)
  * Veja README.md para pinagem, fiação e calibração.
@@ -23,37 +26,43 @@
 #include <Wire.h>
 #include <DHT.h>
 #include <Adafruit_ADS1X15.h>
+#include <Adafruit_NeoPixel.h>
 
 #include "camera_pins.h"
 #include "dashboard_html.h"
 #include "stream_server.h"
+#include "secrets.h" // WIFI_SSID, WIFI_PASSWORD, AUTH_USER, AUTH_PASS — veja secrets.h.example
 
 // ---------------------- CONFIGURAÇÃO: EDITE AQUI ----------------------
-const char *WIFI_SSID     = "SEU_WIFI";
-const char *WIFI_PASSWORD = "SUA_SENHA";
-const char *HOSTNAME      = "estufa"; // acesse em http://estufa.local
+const char *HOSTNAME = "estufa"; // acesse em http://estufa.local
 
-// Credenciais exigidas para acessar o painel e o stream (HTTP Basic Auth).
+// WIFI_SSID/WIFI_PASSWORD e AUTH_USER/AUTH_PASS agora vêm de secrets.h
+// (arquivo local, fora do Git — veja secrets.h.example para o modelo).
 // Necessário porque, com o acesso remoto (túnel), este painel controla
 // atuadores (bomba/relé) e fica alcançável pela internet. Troque a senha
-// antes de expor a placa fora da rede local. As mesmas credenciais são
-// digitadas uma vez no dashboard (ficam salvas só no navegador).
-const char *AUTH_USER = "estufa";
-const char *AUTH_PASS = "troque-esta-senha";
+// padrão antes de expor a placa fora da rede local.
 
 // Pinos livres na ESP32-CAM (não usados pela câmera). Veja README.md
 // para a lista completa de pinos livres/cuidados antes de trocar algo aqui.
-#define DHTPIN         13
-#define DHTTYPE        DHT11
-#define I2C_SDA        14
-#define I2C_SCL        15
-#define PUMP_RELAY_PIN  2
-#define UV_RELAY_PIN   12
+#define DHTPIN           4  // pisca rapidinho o LED de flash on-board a cada leitura (ignorar)
+#define DHTTYPE         DHT11
+#define I2C_SDA         13
+#define I2C_SCL         15
+#define PUMP_RELAY_PIN   2  // também liga o LED vermelho pequeno on-board (ignorar)
+#define LED_STRIP_PIN   12  // DATA da fita WS2812B
 
 // A maioria dos módulos de relé de 1/2 canais é ativa em nível BAIXO.
 // Se o seu módulo for ativo em nível ALTO, troque LOW<->HIGH abaixo.
 #define RELAY_ON  LOW
 #define RELAY_OFF HIGH
+
+// Fita de LED endereçável (WS2812B/Neopixel) usada como luz "UV" — na
+// prática é uma aproximação visual em roxo/violeta, não UV-C real.
+// Ajuste NUM_LEDS para o tamanho real da sua fita.
+#define NUM_LEDS 75
+Adafruit_NeoPixel ledStrip(NUM_LEDS, LED_STRIP_PIN, NEO_GRB + NEO_KHZ800);
+const uint32_t UV_COLOR = Adafruit_NeoPixel::Color(148, 0, 211); // violeta, mais próximo visualmente de UV
+const uint8_t UV_BRIGHTNESS = 120; // 0-255
 
 // Calibração dos sensores de umidade do solo (valores brutos do ADS1115).
 // Ajuste conforme o README: leia o valor com o sensor seco e com ele em água.
@@ -140,7 +149,8 @@ void setPump(bool on) {
 
 void setUV(bool on) {
   uvState = on;
-  digitalWrite(UV_RELAY_PIN, on ? RELAY_ON : RELAY_OFF);
+  ledStrip.fill(on ? UV_COLOR : 0);
+  ledStrip.show();
 }
 
 // Liga a bomba por PUMP_RUN_TIME quando o solo mais seco cai abaixo do
@@ -229,9 +239,12 @@ void setup() {
   Serial.setDebugOutput(false);
 
   pinMode(PUMP_RELAY_PIN, OUTPUT);
-  pinMode(UV_RELAY_PIN, OUTPUT);
   digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
-  digitalWrite(UV_RELAY_PIN, RELAY_OFF);
+
+  ledStrip.begin();
+  ledStrip.setBrightness(UV_BRIGHTNESS);
+  ledStrip.clear();
+  ledStrip.show();
 
   dht.begin();
   Wire.begin(I2C_SDA, I2C_SCL);
