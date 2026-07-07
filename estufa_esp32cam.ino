@@ -127,6 +127,16 @@ bool initCamera() {
     Serial.printf("Falha ao iniciar a câmera: 0x%x\n", err);
     return false;
   }
+
+  // Corrige a orientação da imagem conforme a câmera fica montada
+  // fisicamente na estufa. Se ainda estiver espelhada (invertida na
+  // horizontal), descomente a linha do set_hmirror abaixo.
+  sensor_t *s = esp_camera_sensor_get();
+  if (s) {
+    s->set_vflip(s, 1);   // corrige imagem de cabeça para baixo
+    // s->set_hmirror(s, 1);
+  }
+
   return true;
 }
 
