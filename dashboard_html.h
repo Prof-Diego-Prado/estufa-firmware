@@ -182,7 +182,11 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
     <div class="panel">
       <div class="panel-head">
         <h2>Monitoramento — ESTUFA-CAM 01</h2>
-        <span class="eyebrow">AO VIVO</span>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="chip" id="camConnectBtn" type="button" hidden>🔌 Conectar</button>
+          <button class="chip" id="camDisconnectBtn" type="button" hidden>⛔ Desconectar</button>
+          <span class="eyebrow">AO VIVO</span>
+        </div>
       </div>
       <div class="cam-frame offline" id="camFrame">
         <img id="camStream" alt="Stream da câmera da estufa">
@@ -195,8 +199,8 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
           </div>
         </div>
         <div class="no-signal">
-          <span class="big">📡 SEM SINAL</span>
-          <span class="sub">Não foi possível conectar à câmera. Verifique a rede/túnel e as credenciais de acesso.</span>
+          <span class="big" id="noSignalBig">📡 SEM SINAL</span>
+          <span class="sub" id="noSignalSub">Não foi possível conectar à câmera. Verifique a rede/túnel e as credenciais de acesso.</span>
         </div>
       </div>
     </div>
@@ -481,6 +485,10 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
   // ---------------- câmera (stream real) ----------------
   const camFrame = document.getElementById('camFrame');
   const camStream = document.getElementById('camStream');
+  const noSignalBig = document.getElementById('noSignalBig');
+  const noSignalSub = document.getElementById('noSignalSub');
+  const camConnectBtn = document.getElementById('camConnectBtn');
+  const camDisconnectBtn = document.getElementById('camDisconnectBtn');
 
   function streamHost(){
     if(state.streamBase) return state.streamBase.replace(/\/$/, '');
@@ -494,15 +502,36 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
   // ele mesmo via fetch(), manda o login no cabeçalho da requisição
   // (isso não é bloqueado) e desenha os frames JPEG à mão.
   let camAbort = null;
+  let manualDisconnect = false;
+
+  function updateCamButtons(){
+    if(!state.user){ camConnectBtn.hidden = true; camDisconnectBtn.hidden = true; return; }
+    camConnectBtn.hidden = !manualDisconnect;
+    camDisconnectBtn.hidden = manualDisconnect;
+  }
 
   function setCamOnline(){ camFrame.classList.remove('offline'); }
   function setCamOffline(){
     camFrame.classList.add('offline');
+    noSignalBig.textContent = '📡 SEM SINAL';
+    noSignalSub.textContent = 'Não foi possível conectar à câmera. Verifique a rede/túnel e as credenciais de acesso.';
     clearTimeout(camRetryTimer);
-    camRetryTimer = setTimeout(connectCam, 4000);
+    if(!manualDisconnect) camRetryTimer = setTimeout(connectCam, 4000);
+  }
+
+  function disconnectCam(){
+    manualDisconnect = true;
+    clearTimeout(camRetryTimer);
+    if(camAbort) camAbort.abort();
+    camFrame.classList.add('offline');
+    noSignalBig.textContent = '⛔ DESCONECTADO';
+    noSignalSub.textContent = 'Câmera desconectada manualmente — libere a vaga para outro dispositivo ver.';
+    updateCamButtons();
   }
 
   function connectCam(){
+    manualDisconnect = false;
+    updateCamButtons();
     clearTimeout(camRetryTimer);
     if(camAbort) camAbort.abort();
     if(!state.user){ setCamOffline(); return; }
@@ -579,6 +608,8 @@ const char DASHBOARD_HTML[] PROGMEM = R"HTMLPAGE(
 
   document.getElementById('settingsBtn').addEventListener('click', openSettings);
   document.getElementById('settingsCancel').addEventListener('click', closeSettings);
+  camConnectBtn.addEventListener('click', connectCam);
+  camDisconnectBtn.addEventListener('click', disconnectCam);
   document.getElementById('settingsSave').addEventListener('click', () => {
     state.user = document.getElementById('inUser').value.trim();
     state.pass = document.getElementById('inPass').value;
