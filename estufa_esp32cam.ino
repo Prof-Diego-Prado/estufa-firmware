@@ -205,8 +205,19 @@ void handleRoot() {
   server.send_P(200, "text/html", DASHBOARD_HTML);
 }
 
+// O navegador manda um pedido OPTIONS de checagem ("preflight") antes de
+// qualquer fetch() de outra origem que inclua o cabeçalho Authorization
+// (ex.: o painel do GitHub Pages buscando dados via túnel).
+void handleDataOptions() {
+  server.sendHeader("Access-Control-Allow-Origin", "*");
+  server.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Authorization");
+  server.send(204);
+}
+
 void handleData() {
   if (!checkAuth()) return;
+  server.sendHeader("Access-Control-Allow-Origin", "*");
   String json = "{";
   json += "\"temperatura\":" + String(isnan(temperature) ? -1 : temperature, 1) + ",";
   json += "\"umidade_ar\":" + String(isnan(humidity) ? -1 : humidity, 1) + ",";
@@ -291,6 +302,7 @@ void setup() {
 
   server.on("/", handleRoot);
   server.on("/data", handleData);
+  server.on("/data", HTTP_OPTIONS, handleDataOptions);
   server.on("/pump", handlePump);
   server.on("/uv", handleUV);
   server.on("/auto", handleAuto);
