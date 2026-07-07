@@ -77,6 +77,7 @@ const unsigned long PUMP_COOLDOWN  = 60000UL;  // espera mínima entre ciclos (m
 DHT dht(DHTPIN, DHTTYPE);
 Adafruit_ADS1115 ads;
 WebServer server(80);
+bool adsFound = false;
 
 float temperature = NAN, humidity = NAN;
 int soil1Pct = 0, soil2Pct = 0;
@@ -135,6 +136,10 @@ void readSensors() {
   float t = dht.readTemperature();
   if (!isnan(h)) humidity = h;
   if (!isnan(t)) temperature = t;
+
+  // Sem o ADS1115 conectado, não tenta ler (evita travar o barramento I2C
+  // e, com isso, atrasar o resto do firmware, inclusive o dashboard).
+  if (!adsFound) return;
 
   int16_t raw1 = ads.readADC_SingleEnded(0);
   int16_t raw2 = ads.readADC_SingleEnded(1);
@@ -248,7 +253,8 @@ void setup() {
 
   dht.begin();
   Wire.begin(I2C_SDA, I2C_SCL);
-  if (!ads.begin()) {
+  adsFound = ads.begin();
+  if (!adsFound) {
     Serial.println("ADS1115 não encontrado. Verifique a fiação I2C.");
   }
 
@@ -257,6 +263,8 @@ void setup() {
   }
 
   WiFi.mode(WIFI_STA);
+  WiFi.setSleep(false); // desliga o modo de economia de energia do rádio —
+                        // sem isso, o servidor web fica lento/instável
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
   Serial.print("Conectando ao WiFi");
   while (WiFi.status() != WL_CONNECTED) {

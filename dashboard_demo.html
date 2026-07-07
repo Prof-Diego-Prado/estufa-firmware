@@ -80,6 +80,7 @@
     font-family:var(--font-display); font-size:.72rem; letter-spacing:.05em; color:var(--muted);
     white-space:nowrap;
   }
+  button.chip{cursor:pointer; font:inherit; letter-spacing:.05em;}
   .chip .dot{width:7px; height:7px; border-radius:50%; background:var(--muted-2); flex:none;}
   .chip.online .dot{background:var(--ok); box-shadow:0 0 0 3px color-mix(in srgb, var(--ok) 25%, transparent);}
   .status-dot-btn{
@@ -124,14 +125,33 @@
     color:#d7f6ff; display:flex; justify-content:space-between; gap:8px;
   }
   .cam-frame canvas{filter:brightness(.28) saturate(.35);}
+  .cam-frame img{width:100%; height:100%; object-fit:cover; display:block;}
+  .cam-frame:not(.real-mode) #realCamImg{display:none;}
+  .cam-frame.real-mode canvas{display:none;}
+  .cam-frame.real-mode img{filter:none; transition:filter .3s;}
+  .cam-frame.real-mode.offline img{filter:brightness(.25) saturate(.3);}
   .no-signal{
     position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:6px; background:rgba(3,8,10,.82); color:#ffb3ba; text-align:center; padding:16px;
-    font-family:var(--font-display);
+    font-family:var(--font-display); opacity:0; pointer-events:none; transition:opacity .3s;
   }
+  .cam-frame.offline .no-signal{opacity:1;}
   .no-signal .big{font-size:1.05rem; letter-spacing:.1em;}
   .no-signal .sub{font-size:.72rem; color:#ffcdd2; max-width:300px; letter-spacing:.02em;}
   .no-signal .sub.network{color:#ffd9c2;}
+
+  /* ---------- modal (config. da câmera real) ---------- */
+  .modal-overlay{position:fixed; inset:0; background:rgba(2,6,10,.72); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50;}
+  .modal-overlay[hidden]{display:none;}
+  .modal{background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:22px; width:100%; max-width:380px; display:flex; flex-direction:column; gap:12px;}
+  .modal h2{margin:0; font-size:1rem;}
+  .modal p{margin:0; font-size:.78rem; color:var(--muted); line-height:1.4;}
+  .field{display:flex; flex-direction:column; gap:5px;}
+  .field label{font-size:.72rem; color:var(--muted); font-family:var(--font-display); letter-spacing:.04em;}
+  .field input{background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:9px 10px; color:var(--text); font-family:var(--font-body); font-size:.9rem;}
+  .modal-actions{display:flex; justify-content:flex-end; gap:10px; margin-top:4px; flex-wrap:wrap;}
+  .btn{font-family:var(--font-display); font-size:.78rem; letter-spacing:.03em; padding:9px 16px; border-radius:9px; border:1px solid var(--border); background:var(--surface-2); color:var(--text); cursor:pointer;}
+  .btn.primary{background:var(--accent); border-color:var(--accent); color:#04222a;}
 
   .vitals{display:flex; flex-direction:column; gap:12px;}
   .vitals-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;}
@@ -230,9 +250,11 @@
     <div class="panel">
       <div class="panel-head">
         <h2>Monitoramento — ESTUFA-CAM 01</h2>
+        <button class="chip" id="camSettingsBtn" type="button">🎥 Câmera real</button>
       </div>
-      <div class="cam-frame">
+      <div class="cam-frame offline" id="camFrame">
         <canvas id="camCanvas"></canvas>
+        <img id="realCamImg" alt="Stream real da câmera da estufa">
         <div class="cam-overlay">
           <div class="cam-tl">ESTUFA-CAM-01 · 960×600</div>
           <div class="cam-bottom">
@@ -242,7 +264,7 @@
         </div>
         <div class="no-signal">
           <span class="big">📡 SIGNAL LOST</span>
-          <span class="sub">Verifique a conexão local da câmera.</span>
+          <span class="sub" id="noSignalSub">Verifique a conexão local da câmera.</span>
           <span class="sub network">Última rede conectada: <strong>Educação</strong></span>
         </div>
       </div>
@@ -361,6 +383,21 @@
 
 </div>
 
+<div class="modal-overlay" id="camSettingsOverlay" hidden>
+  <div class="modal">
+    <h2>Câmera real (opcional)</h2>
+    <p>Cole aqui o endereço público do stream da sua ESP32-CAM (ex.: URL de um túnel Cloudflare) e as credenciais do firmware. Fica salvo só neste navegador (localStorage) — nunca no código publicado.</p>
+    <div class="field"><label>Endereço do stream</label><input type="text" id="camInUrl" placeholder="https://exemplo.trycloudflare.com"></div>
+    <div class="field"><label>Usuário</label><input type="text" id="camInUser" autocomplete="username"></div>
+    <div class="field"><label>Senha</label><input type="password" id="camInPass" autocomplete="current-password"></div>
+    <p>Deixe o endereço em branco e salve para voltar à simulação.</p>
+    <div class="modal-actions">
+      <button class="btn" id="camSettingsCancel" type="button">Cancelar</button>
+      <button class="btn primary" id="camSettingsSave" type="button">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   "use strict";
@@ -380,6 +417,15 @@
     hist: { temp:[], hum:[], soil1:[], soil2:[] }
   };
   const PUMP_RUN_MS = 6000, PUMP_COOLDOWN_MS = 18000;
+
+  // Câmera real opcional (túnel público até a ESP32-CAM). Credenciais só
+  // ficam salvas neste navegador (localStorage), nunca no HTML publicado.
+  const camState = {
+    url: localStorage.getItem('estufaCamUrl') || '',
+    user: localStorage.getItem('estufaCamUser') || '',
+    pass: localStorage.getItem('estufaCamPass') || ''
+  };
+  let camRetryTimer = null;
 
   // Clima real de Guaíra, PR (Open-Meteo — API pública, sem chave, CORS liberado).
   // Só a temperatura/umidade do ar vêm daqui; solo continua simulado.
@@ -513,6 +559,106 @@
     camCanvas.width = camW * dpr; camCanvas.height = camH * dpr;
     camCtx.setTransform(dpr,0,0,dpr,0,0);
   }
+
+  // ---------------- câmera real (opcional, via túnel) ----------------
+  const camFrame = document.getElementById('camFrame');
+  const realCamImg = document.getElementById('realCamImg');
+  const noSignalSub = document.getElementById('noSignalSub');
+
+  // Navegadores modernos bloqueiam tanto credenciais embutidas na URL
+  // quanto (em vários casos) o popup nativo de login para imagens de um
+  // site diferente (proteção anti-rastreamento cross-site). Por isso o
+  // JS busca o stream ele mesmo via fetch(), manda o login no cabeçalho
+  // da requisição (isso não é bloqueado) e desenha os frames JPEG à mão.
+  let camAbort = null;
+
+  function setRealCamOnline(){ camFrame.classList.remove('offline'); }
+  function setRealCamOffline(){
+    camFrame.classList.add('offline');
+    clearTimeout(camRetryTimer);
+    camRetryTimer = setTimeout(connectRealCam, 4000);
+  }
+
+  function connectRealCam(){
+    clearTimeout(camRetryTimer);
+    if(camAbort) camAbort.abort();
+    if(!camState.url) return;
+
+    const controller = new AbortController();
+    camAbort = controller;
+    let gotFrame = false;
+    const watchdog = setTimeout(() => { if(!gotFrame) controller.abort(); }, 8000);
+    const authHeader = camState.user ? ('Basic ' + btoa(camState.user + ':' + camState.pass)) : null;
+    let lastBlobUrl = null;
+
+    (async () => {
+      try {
+        const res = await fetch(camState.url.replace(/\/$/, '') + '/stream', {
+          headers: authHeader ? { Authorization: authHeader } : {},
+          signal: controller.signal
+        });
+        if(!res.ok || !res.body) throw new Error('HTTP ' + res.status);
+        const reader = res.body.getReader();
+        let buf = new Uint8Array(0);
+        while(true){
+          const { done, value } = await reader.read();
+          if(done) break;
+          const merged = new Uint8Array(buf.length + value.length);
+          merged.set(buf); merged.set(value, buf.length);
+          buf = merged;
+
+          let start = -1;
+          for(let i=0;i<buf.length-1;i++){ if(buf[i]===0xFF && buf[i+1]===0xD8){ start=i; break; } }
+          if(start === -1){ if(buf.length > 300000) buf = new Uint8Array(0); continue; }
+          let end = -1;
+          for(let i=start+2;i<buf.length-1;i++){ if(buf[i]===0xFF && buf[i+1]===0xD9){ end=i+2; break; } }
+          if(end === -1){ if(start>0) buf = buf.slice(start); continue; }
+
+          const frame = buf.slice(start, end);
+          buf = buf.slice(end);
+          if(!gotFrame){ gotFrame = true; clearTimeout(watchdog); setRealCamOnline(); }
+          const blobUrl = URL.createObjectURL(new Blob([frame], { type:'image/jpeg' }));
+          const prev = lastBlobUrl;
+          realCamImg.src = blobUrl;
+          lastBlobUrl = blobUrl;
+          if(prev) URL.revokeObjectURL(prev);
+        }
+      } catch(e){ /* conexão caiu ou falhou — tratado abaixo */ }
+      clearTimeout(watchdog);
+      setRealCamOffline();
+    })();
+  }
+
+  function applyCamMode(){
+    if(camState.url){
+      camFrame.classList.add('real-mode');
+      noSignalSub.textContent = 'Não foi possível conectar à câmera real. Verifique o túnel/credenciais.';
+      connectRealCam();
+    } else {
+      camFrame.classList.remove('real-mode');
+      camFrame.classList.add('offline');
+      noSignalSub.textContent = 'Verifique a conexão local da câmera.';
+    }
+  }
+
+  const camSettingsOverlay = document.getElementById('camSettingsOverlay');
+  document.getElementById('camSettingsBtn').addEventListener('click', () => {
+    document.getElementById('camInUrl').value = camState.url;
+    document.getElementById('camInUser').value = camState.user;
+    document.getElementById('camInPass').value = camState.pass;
+    camSettingsOverlay.hidden = false;
+  });
+  document.getElementById('camSettingsCancel').addEventListener('click', () => { camSettingsOverlay.hidden = true; });
+  document.getElementById('camSettingsSave').addEventListener('click', () => {
+    camState.url = document.getElementById('camInUrl').value.trim();
+    camState.user = document.getElementById('camInUser').value.trim();
+    camState.pass = document.getElementById('camInPass').value;
+    localStorage.setItem('estufaCamUrl', camState.url);
+    localStorage.setItem('estufaCamUser', camState.user);
+    localStorage.setItem('estufaCamPass', camState.pass);
+    camSettingsOverlay.hidden = true;
+    applyCamMode();
+  });
 
   const plants = Array.from({length:9}, (_,i) => ({
     x: (i+0.5)/9,
@@ -704,6 +850,7 @@
   resizeCam();
   render();
   updateClocks();
+  applyCamMode();
   fetchClimate().then(render);
   setInterval(updateClocks, 1000);
   setInterval(tick, 2000);
