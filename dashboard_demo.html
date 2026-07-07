@@ -587,7 +587,7 @@
     const controller = new AbortController();
     camAbort = controller;
     let gotFrame = false;
-    const watchdog = setTimeout(() => { if(!gotFrame) controller.abort(); }, 8000);
+    const watchdog = setTimeout(() => { if(!gotFrame) controller.abort(); }, 18000);
     const authHeader = camState.user ? ('Basic ' + btoa(camState.user + ':' + camState.pass)) : null;
     let lastBlobUrl = null;
 
