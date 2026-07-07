@@ -107,6 +107,18 @@ static esp_err_t stream_handler(httpd_req_t *req) {
   return res;
 }
 
+// O navegador manda um pedido OPTIONS de checagem ("preflight") antes de
+// qualquer fetch() de outra origem que inclua o cabeçalho Authorization.
+// Sem responder isso, o navegador cancela o pedido real antes de tentar.
+static esp_err_t stream_options_handler(httpd_req_t *req) {
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, OPTIONS");
+  httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Authorization");
+  httpd_resp_set_status(req, "204 No Content");
+  httpd_resp_send(req, NULL, 0);
+  return ESP_OK;
+}
+
 // Inicia o servidor de vídeo na porta 81 (o dashboard fica na porta 80).
 inline void startCameraServer() {
   httpd_config_t config = HTTPD_DEFAULT_CONFIG();
@@ -119,8 +131,15 @@ inline void startCameraServer() {
     .handler = stream_handler,
     .user_ctx = NULL
   };
+  httpd_uri_t stream_options_uri = {
+    .uri = "/stream",
+    .method = HTTP_OPTIONS,
+    .handler = stream_options_handler,
+    .user_ctx = NULL
+  };
 
   if (httpd_start(&stream_httpd, &config) == ESP_OK) {
     httpd_register_uri_handler(stream_httpd, &stream_uri);
+    httpd_register_uri_handler(stream_httpd, &stream_options_uri);
   }
 }
